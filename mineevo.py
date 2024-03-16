@@ -135,7 +135,7 @@ async def start_autobur(app):
                 if new_fuel_msg is None:
                     await asyncio.sleep(10)
                     continue
-                if new_fuel_msg.startswith('❗️В месторождении кончилась нефть!'):
+                if new_fuel_msg.text.startswith('❗️В месторождении кончилась нефть!'):
                     break
             
         bur_msg = await make_request(app, "бур", "mine_evo_bot", timeout=10)
