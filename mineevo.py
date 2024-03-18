@@ -50,7 +50,7 @@ helplist.add_module(
     ).add_feature(
         Feature('Log', 'Отчет по найденным кейсам, найденным бустерам, убитым боссам')
     ).add_feature(
-        Feature('Авто атака', 'Само начинает и перестает атаковать босса при его выборе.\n‼️ Выбриать босса следует в ЛОГ и РОБОЧЕМ чатах либо в ЛС у бота')
+        Feature('Авто атака', 'Само начинает и перестает атаковать босса при его выборе')
     ).add_feature(
         Feature('Авто авто-бур', 'Сам качает топливо и заправляет бур')
     )
@@ -371,7 +371,7 @@ async def _stat(app, msg):
 
 # авто атака босса
 @Client.on_message(
-    filters.chat(['mine_evo_bot', LOG_CHAT, WORKER_CHAT]) &
+    filters.chat('mine_evo_bot') &
     filters.user('mine_evo_bot') &
     filters.regex('🔶 Ты выбрал босса: .*')
 )
@@ -384,7 +384,7 @@ async def _boss(app, _):
       
 # остановка автоатаки  
 @Client.on_message(
-    filters.chat(['mine_evo_bot', LOG_CHAT, WORKER_CHAT]) &
+    filters.chat('mine_evo_bot') &
     filters.user('mine_evo_bot') &
     filters.regex(".*для атаки выбери босса\!.*")
 )       
@@ -406,7 +406,7 @@ async def _new_cave(app, msg):
 # обработка копки
 @Client.on_message(
     filters.chat(['mine_evo_bot', 'mine_evo_gold_bot']) &
-    filters.user('mine_evo_bot') &
+    filters.user(['mine_evo_bot', 'mine_evo_gold_bot']) &
     filters.regex("Руда на уровень")
     , group=get_group()
 )
@@ -466,7 +466,7 @@ async def _dig_ore(app, msg):
 # лог кейсов, боссов
 @Client.on_message(
     filters.chat(['mine_evo_bot', 'mine_evo_gold_bot']) &
-    filters.user('mine_evo_bot') & (
+    filters.user(['mine_evo_bot', 'mine_evo_gold_bot']) & (
         filters.regex('[✨|😄|📦|🧧|✉️|🌌|💼|👜|🗳|🕋|💎|🎲].*Найден.*') |
         filters.regex('⚡️.*нашел\(ла\).*') |
         filters.regex('🎉 Босс')
