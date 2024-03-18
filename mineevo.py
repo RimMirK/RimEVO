@@ -20,7 +20,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot",
         author="@RimMirK & @kotcananacom",
-        version='3.2.1'
+        version='3.3.0'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -67,7 +67,10 @@ async def _on_ready(app, *_):
     ev = asyncio.get_event_loop()
 
     ev.create_task(digger(app)) # копалка
+    ev.create_task(auto_thx(app)) # автo thx
     ev.create_task(start_autobur(app)) # автобур
+    await asyncio.sleep(60*5)
+    ev.create_task(auto_promo(app)) # авто промо
 
 
 
@@ -475,3 +478,26 @@ async def _dig_ore(app, msg):
 )
 async def _find_cases(_, msg):
     await msg.copy(LOG_CHAT)
+
+async def auto_promo(app):
+    while True:
+        promo_msg = await make_request(app, 'промо', 'mine_evo_bot', timeout=10)
+        if promo_msg != None:
+            if "чтобы, ввести промокод, используй:" in promo_msg.text:
+                bs = BeautifulSoup(promo_msg.text.html, 'lxml')
+                promos = (*map(lambda e: e.text, bs.find_all('code')[2:]),)
+                for promo in promos:
+                    await asyncio.sleep(4)
+                    await app.send_message('mine_evo_bot', f'промо {promo}')
+        else:
+            await asyncio.sleep(20)
+            continue
+        
+        await asyncio.sleep(60*60)   
+                    
+                    
+async def auto_thx(app):
+    while True:
+        await app.send_message(WORKER_CHAT, 'thx')
+        await asyncio.sleep(60*40)
+    
