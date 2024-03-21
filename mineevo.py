@@ -23,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.4.1'
+        version='3.4.0'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -45,9 +45,9 @@ helplist.add_module(
     ).add_command(
         Command(['моткл', 'mopenlim'], [Arg('кол-во')],'Установить лимит открытия кейсов за раз')
     ).add_command(
-        Command(['mdelay'],    [Arg('заддержка в секундах', False)], 'Установить заддержку на копку')
+        Command(['mdelay'],    [Arg('заддержка в секундах', False)], 'Установить заддержку на копку / посмотреть заддержку')
     ).add_command(
-        Command(['matcdelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на атаку босса')
+        Command(['matcdelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на атаку босса / посмотреть заддержку')
     ).add_command(
         Command(['mlsend'], [Arg('ник чела в боте'), Arg('сколько раз'), Arg('сумма')], 'Отправить лимиты')
     ).add_command(
@@ -59,7 +59,7 @@ helplist.add_module(
     ).add_command(
         Command(['mls'], [], 'Остановить отправку (на совсем)')
     ).add_command(
-        Command(['mldelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на отправку лимитов')
+        Command(['mldelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на отправку лимитов / посмотреть заддержку')
     ).add_feature(
         Feature('Авто-выборка шахты', 'автоматическая выборка шахты при увеличении уровня')
     ).add_feature(
@@ -213,7 +213,7 @@ async def _mdelay(app, msg):
         delay = await app.db.get(M, "delay", 3)
         await msg.edit(
             
-            f'⏱ Текущяя заддержка на копку: {b(pnum(delay))}\n'
+            f'⏱ Текущая заддержка на копку: {b(pnum(delay))}\n'
             f"Таким темпом,\n"
             f"за {b('час')} ты вскопаешь {b(f'{60*60/delay:,.0f}')} {plural(60*60     /delay, plural_raz)}\n"
             f"за {b(f'день {  60*60*24  /delay:,.0f}'    )} {        plural(60*60*24  /delay, plural_raz)}\n"
@@ -231,7 +231,7 @@ async def _matcdelay(app, msg):
         )
     except:
         await msg.edit(
-            f"⏱ Текущяя заддержка на атаку: {b(pnum(await app.db.get(M, 'atc_delay', 3)))}"
+            f"⏱ Текущая заддержка на атаку: {b(pnum(await app.db.get(M, 'atc_delay', 3)))}"
         )
 
 # префиксы денег
@@ -302,7 +302,7 @@ async def start_limits(app):
             break
     
 # начать переводить
-@cmd(['msend'])
+@cmd(['mlsend'])
 async def _send(app, msg):
     status = await app.db.get(M, 'limits.status', 'stopped')
     if status == 'process':
@@ -396,7 +396,7 @@ async def _mldelay(app, msg):
         )
     except:
         await msg.edit(
-            f'⏱ Текущяя заддержка на отправку лимитов: {b(pnum(await app.db.get(M, "limits.delay", 5)))}'
+            f'⏱ Текущая заддержка на отправку лимитов: {b(pnum(await app.db.get(M, "limits.delay", 5)))}'
         )
 
     
