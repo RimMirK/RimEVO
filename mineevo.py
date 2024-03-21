@@ -3,24 +3,27 @@ WORKER_CHAT = -10012345678
 
 
 from pyrogram import filters, errors
+from config.user_config import PREFIX
 from utils import (
     Cmd, get_group, code, b, bq,
     helplist, Module, Argument as Arg, Feature, Command,
     plural, parse_amout,
     ModifyPyrogramClient as Client,
-    make_request
+    make_request, get_answer
 )
 import asyncio
 from bs4 import BeautifulSoup
+
+from utils.scripts import pnum, sec_to_str
 
 cmd = Cmd(G:=get_group())
 
 helplist.add_module(
     Module(
         "MineEvo",
-        description="Модуль для игры @mine_evo_bot",
+        description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.3.0'
+        version='3.4.1'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -42,9 +45,21 @@ helplist.add_module(
     ).add_command(
         Command(['моткл', 'mopenlim'], [Arg('кол-во')],'Установить лимит открытия кейсов за раз')
     ).add_command(
-        Command(['mdelay'],    [Arg('сек')], 'Установить заддержку на копку')
+        Command(['mdelay'],    [Arg('заддержка в секундах', False)], 'Установить заддержку на копку')
     ).add_command(
-        Command(['matcdelay'], [Arg('сек')], 'Установить заддержку на атаку босса')
+        Command(['matcdelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на атаку босса')
+    ).add_command(
+        Command(['mlsend'], [Arg('ник чела в боте'), Arg('сколько раз'), Arg('сумма')], 'Отправить лимиты')
+    ).add_command(
+        Command(['mli'], [], 'Информация о текущей отправке')
+    ).add_command(
+        Command(['mlp'], [], 'Поставить отправку на паузу')
+    ).add_command(
+        Command(['mlr'], [], 'Возобновить отправку (убрать с паузы)')
+    ).add_command(
+        Command(['mls'], [], 'Остановить отправку (на совсем)')
+    ).add_command(
+        Command(['mldelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на отправку лимитов')
     ).add_feature(
         Feature('Авто-выборка шахты', 'автоматическая выборка шахты при увеличении уровня')
     ).add_feature(
@@ -69,8 +84,11 @@ async def _on_ready(app, *_):
     ev.create_task(digger(app)) # копалка
     ev.create_task(auto_thx(app)) # автo thx
     ev.create_task(start_autobur(app)) # автобур
+    await asyncio.sleep(10)
+    ev.create_task(start_limits(app)) # лимиты
     await asyncio.sleep(60*5)
     ev.create_task(auto_promo(app)) # авто промо
+
 
 
 
@@ -185,14 +203,22 @@ async def _mdelay(app, msg):
         delay = float(msg.text.split(maxsplit=1)[-1])
         await app.db.set(M, 'delay', delay)
         await msg.edit(
-            f"Заддержка установлена на {delay}\n"
-            f"Таким темпом\n"
+            f"⏱ Заддержка установлена на {b(pnum(delay))} c\n"
+            f"Таким темпом,\n"
             f"за {b('час')} ты вскопаешь {b(f'{60*60/delay:,.0f}')} раз\n"
             f"за {b(f'день {  60*60*24  /delay:,.0f}'    )} раз\n"
             f"за {b(f'неделю {60*60*24*7/delay:,.0f}')} раз\n"
         )
     except:
-        await msg.edit('ошибка')
+        delay = await app.db.get(M, "delay", 3)
+        await msg.edit(
+            
+            f'⏱ Текущяя заддержка на копку: {b(pnum(delay))}\n'
+            f"Таким темпом,\n"
+            f"за {b('час')} ты вскопаешь {b(f'{60*60/delay:,.0f}')} {plural(60*60     /delay, plural_raz)}\n"
+            f"за {b(f'день {  60*60*24  /delay:,.0f}'    )} {        plural(60*60*24  /delay, plural_raz)}\n"
+            f"за {b(f'неделю {60*60*24*7/delay:,.0f}')} {            plural(60*60*24*7/delay, plural_raz)}\n"
+        )
 
 # заддержка на атаку
 @cmd(['matcdelay'])
@@ -201,10 +227,12 @@ async def _matcdelay(app, msg):
         delay = float(msg.text.split(maxsplit=1)[-1])
         await app.db.set(M, 'atc_delay', delay)
         await msg.edit(
-            f"Заддержка установлена на атаку: {delay}\n"
+            f"⏱ Заддержка на атаку установлена: {b(pnum(delay))}\n"
         )
     except:
-        await msg.edit('ошибка')
+        await msg.edit(
+            f"⏱ Текущяя заддержка на атаку: {b(pnum(await app.db.get(M, 'atc_delay', 3)))}"
+        )
 
 # префиксы денег
 pref = {
@@ -248,20 +276,130 @@ pref = {
 }
 
 
-# отпрака лимитов
-# @cmd(['send'])
+# Лимиты
+
+plural_limit = ['лимит', 'лимита', 'лимитов']
+
+# сама отправка
+async def start_limits(app):
+    while True:
+        if await app.db.get(M, 'limits.status', 'stopped') == 'process':
+            if (
+                await app.db.get(M, 'limits.current', 0)
+                ==
+                await app.db.get(M, 'limits.count', 0)
+            ): 
+                await app.db.set(M, 'limits.status', 'Отправка завершена!')
+                break
+        
+            nickname = await app.db.get(M, 'limits.nickname', '-')
+            value = await app.db.get(M, 'limits.value', '-')
+            await app.send_message(WORKER_CHAT, f'перевести {nickname} {value}')
+            app.print(f'перевести {nickname} {value}')
+            await app.db.set(M, 'limits.current', (await app.db.get(M, 'limits.current', 0)) + 1)
+            await asyncio.sleep(await app.db.get(M, 'limits.dalay', 5))
+        else:
+            break
+    
+# начать переводить
+@cmd(['msend'])
 async def _send(app, msg):
-    _, nickname, count, val = msg.text.split(maxsplit=3)
+    status = await app.db.get(M, 'limits.status', 'stopped')
+    if status == 'process':
+        nickname = await app.db.get(M, 'limits.nickname', False)
+        return await msg.edit(f"Я уже и так перевожу лимиты!\n{nickname = }")
+    elif status == 'paused':
+        return await msg.edit(f"Лимиты переводятся, но перевод на паузе")
+    
+    try: _, nickname, count, value = msg.text.split(maxsplit=3)
+    except ValueError: return await msg.edit(f"<code>{PREFIX}{msg.command[0]}</code> < ник игрока > < сколько раз > < сумма > ")
     count = int(count)
-    to_send = parse_amout(val, pref) / (1 - .1), 2
+    
+    await app.db.set(M, 'limits.status', 'process')
+    await app.db.set(M, 'limits.nickname', nickname)
+    await app.db.set(M, 'limits.count', count)
+    await app.db.set(M, 'limits.current', 0)
+    await app.db.set(M, 'limits.value', value)
+    
+    delay = await app.db.get(M, 'limits.delay', 5)
+    
     await msg.edit(
-        f"💲 перевод игроку {code(nickname)}\n"
-        f"{code(count)} раз по {code(val)}.\n"
-        f"С у чётом комисии: {code(round(to_send, 2))}\n"
-        f"Время отправки: {b(count * 2)} с.\n"
-        f"или {b(round(count * 2 / 60, 2))} м.\n"
-        f"или {b(round(count * 2 / 60 / 60, 2))} ч."
+        f"💲 перевод игроку 🪪 {code(nickname)}\n"
+        f"🎚 {b(count)} раз по 💵 {code(value)}.\n"
+        f"Время отправки: ⏳ примерно {b(sec_to_str(count * delay))}\n"
     )
+    
+    await start_limits(app)
+
+# инфо
+@cmd(['mli'])
+async def _mli(app, msg):
+    delay = await app.db.get(M, 'limits.delay', 5)
+    if nickname := await app.db.get(M, 'limits.nickname', False):
+        
+        status  = await app.db.get(M, 'limits.status', 'stopped')
+        count   = await app.db.get(M, 'limits.count')
+        current = await app.db.get(M, 'limits.current', 0)
+        value   = await app.db.get(M, 'limits.value', '-')
+        
+        await msg.edit(
+            b("Текущий перевод: \n\n") +
+            f"ℹ️ {b('|')} Статус: {b(status)}\n"
+            f"⏱ {b('|')} Заддержка: {b(sec_to_str(delay))}\n"
+            f"🪪 {b('|')} Кому: {code(nickname)}\n"
+            f"💵 {b('|')} Сколько: {b(value)}\n"
+            f"🎚 {b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
+            f"📟 {b('|')} уже отправилось: {b(current)} {plural(current, plural_limit)}\n"
+            f"⏰ {b('|')} еще надо отправить: {b(count-current)} {plural(count-current, plural_limit)}\n"
+            f"⏳ {b('|')} Примерно осталось: {b(sec_to_str((count-current)*delay))}"
+        )
+    else:
+        return await msg.edit(f"Переводов нет!\n\nЗаддержка: {b(delay)}")
+        
+# остановить
+@cmd(['mls'])
+async def _mls(app, msg):
+    await msg.edit("лимиты отменены!")
+    await app.db.set(M, 'limits.status', 'stopped')
+    await app.db.set(M, 'limits.nickname', '-')
+    await app.db.set(M, 'limits.count', 0)
+    await app.db.set(M, 'limits.current', 0)
+    await app.db.set(M, 'limits.value', '-')
+
+# поставить на паузу
+@cmd(['mlp'])
+async def _mlp(app, msg):
+    await msg.edit("⏸ Лимиты поставлены на паузу!")
+    await app.db.set(M, 'limits.status', 'paused')
+
+    
+# продолжить (убрать с паузы)
+@cmd(['mlr'])
+async def _mlr(app, msg):
+    if await app.db.get(M, 'limits.status', 'stopped') not in ['paused', 'process']:
+        return await msg.edit("Так ничего не паузе и не стоит!")
+    await app.db.set(M, 'limits.status', 'process')
+    
+    await msg.edit("▶️ Возобновлено!")
+    
+    await start_limits(app)
+
+
+# заддержка
+@cmd(['mldelay'])
+async def _mldelay(app, msg):
+    try:
+        delay = float(msg.text.split(maxsplit=1)[-1])
+        await app.db.set(M, 'limits.delay', delay)
+        await msg.edit(
+            f"⏱ Заддержка на отправку лимитов установлена на {b(pnum(delay))}"
+        )
+    except:
+        await msg.edit(
+            f'⏱ Текущяя заддержка на отправку лимитов: {b(pnum(await app.db.get(M, "limits.delay", 5)))}'
+        )
+
+    
 
 # открывание кейсов
 @cmd(["mopen", "mcase", 'мо', 'мотк', 'моткрыть'])
@@ -487,17 +625,29 @@ async def auto_promo(app):
                 bs = BeautifulSoup(promo_msg.text.html, 'lxml')
                 promos = (*map(lambda e: e.text, bs.find_all('code')[2:]),)
                 for promo in promos:
+                    sent_message = await app.send_message('mine_evo_bot', f'промо {promo}')
+                    m = await get_answer(app, sent_message, startswith='❗️')
+                    if m:
+                        try: await m.delete()
+                        except: pass
+                    await sent_message.delete()
+                    
                     await asyncio.sleep(4)
-                    await app.send_message('mine_evo_bot', f'промо {promo}')
         else:
             await asyncio.sleep(20)
             continue
         
-        await asyncio.sleep(60*60)   
+        await asyncio.sleep(60*60*20)   
                     
                     
 async def auto_thx(app):
     while True:
-        await app.send_message(WORKER_CHAT, 'thx')
+        sent_message = await app.send_message(WORKER_CHAT, 'thx')
+        m = await get_answer(app, sent_message, startswith='❕')
+        if m:
+            try: await m.delete()
+            except: pass
+        await sent_message.delete()
+        
         await asyncio.sleep(60*40)
     
