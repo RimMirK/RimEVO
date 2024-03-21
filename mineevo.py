@@ -23,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.4.0'
+        version='3.4.1'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -297,7 +297,7 @@ async def start_limits(app):
             await app.send_message(WORKER_CHAT, f'перевести {nickname} {value}')
             app.print(f'перевести {nickname} {value}')
             await app.db.set(M, 'limits.current', (await app.db.get(M, 'limits.current', 0)) + 1)
-            await asyncio.sleep(await app.db.get(M, 'limits.dalay', 5))
+            await asyncio.sleep(await app.db.get(M, 'limits.delay', 5))
         else:
             break
     
