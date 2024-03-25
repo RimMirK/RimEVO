@@ -23,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.4.1'
+        version='3.5.0'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -83,6 +83,8 @@ async def _on_ready(app, *_):
 
     ev.create_task(digger(app)) # копалка
     ev.create_task(auto_thx(app)) # автo thx
+    ev.create_task(start_autobonus(app)) # авто Бонус
+    await asyncio.sleep(2)
     ev.create_task(start_autobur(app)) # автобур
     await asyncio.sleep(10)
     ev.create_task(start_limits(app)) # лимиты
@@ -148,17 +150,21 @@ async def check_fuel(app):
     
 # авто авто-бур
 async def start_autobur(app):
-    app.print("Пополняю бур каждые 12 часов")
+    app.print("Пополняю бур")
     while True:
-        if await check_fuel(app) == 0:
-            for _ in range(10):
-                new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", startswith='🛢 Бочка топлива', timeout=10)
-                if new_fuel_msg is None:
-                    await asyncio.sleep(10)
-                    continue
-                if new_fuel_msg.text.startswith('❗️В месторождении кончилась нефть!'):
-                    break
-            
+        # if await check_fuel(app) == 0:
+        while True:
+            app.print("кач")
+            new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", startswith='🛢 Бочка топлива', timeout=10)
+            if new_fuel_msg is None:
+                await asyncio.sleep(10)
+                continue
+            if 'В месторождении кончилась нефть!' in new_fuel_msg.text:
+                app.print("нефть закончилась")
+                break
+            await asyncio.sleep(2)
+                
+        app.print('бур')
         bur_msg = await make_request(app, "бур", "mine_evo_bot", timeout=10)
         if bur_msg is None:
             await asyncio.sleep(10)
@@ -167,8 +173,13 @@ async def start_autobur(app):
             bur_msg.chat.id, bur_msg.id,
             callback_data=f"am_refuel:am_refuel:{app.me.id}"
         )
-        await asyncio.sleep(60*60*12)
+        await asyncio.sleep(60*60*4)
 
+# авто Бонус
+async def start_autobonus(app: Client):
+    while True:
+        await make_request(app, 'еб', WORKER_CHAT, timeout=10)
+        await asyncio.sleep(60*60*24 +1)
 
 # начать копать
 @cmd(['mdig'])
@@ -527,7 +538,10 @@ async def _boss(app, _):
 @Client.on_message(
     filters.chat('mine_evo_bot') &
     filters.user('mine_evo_bot') &
-    filters.regex(".*для атаки выбери босса\!.*")
+    (
+        filters.regex(".*для атаки выбери босса\!.*") |
+        filters.regex("🎉 Босс")
+    ), group=get_group()
 )       
 async def _stopboss(app, _):
     await app.db.set(M, 'atc', False)
@@ -617,6 +631,7 @@ async def _dig_ore(app, msg):
 async def _find_cases(_, msg):
     await msg.copy(LOG_CHAT)
 
+# авто промо
 async def auto_promo(app):
     while True:
         promo_msg = await make_request(app, 'промо', 'mine_evo_bot', timeout=10)
@@ -639,7 +654,7 @@ async def auto_promo(app):
         
         await asyncio.sleep(60*60*20)   
                     
-                    
+# авто thx 
 async def auto_thx(app):
     while True:
         sent_message = await app.send_message(WORKER_CHAT, 'thx')
