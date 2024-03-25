@@ -1,7 +1,6 @@
 LOG_CHAT    = -10012345678
 WORKER_CHAT = -10012345678
 
-
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -23,7 +22,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.5.0'
+        version='3.5.1'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -68,6 +67,8 @@ helplist.add_module(
         Feature('Авто атака', 'Само начинает и перестает атаковать босса при его выборе')
     ).add_feature(
         Feature('Авто авто-бур', 'Сам качает топливо и заправляет бур')
+    ).add_feature(
+        Feature('Авто Бонус', 'Сам качает получает Ежедневный Бонус каждый день')
     )
 )
 
