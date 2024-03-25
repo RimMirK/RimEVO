@@ -1,6 +1,7 @@
 LOG_CHAT    = -10012345678
 WORKER_CHAT = -10012345678
 
+
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -22,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.5.1'
+        version='3.5.2'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -156,11 +157,11 @@ async def start_autobur(app):
         # if await check_fuel(app) == 0:
         while True:
             app.print("кач")
-            new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", startswith='🛢 Бочка топлива', timeout=10)
+            new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
             if new_fuel_msg is None:
                 await asyncio.sleep(10)
                 continue
-            if 'В месторождении кончилась нефть!' in new_fuel_msg.text:
+            if 'кончилась' in new_fuel_msg.text:
                 app.print("нефть закончилась")
                 break
             await asyncio.sleep(2)
