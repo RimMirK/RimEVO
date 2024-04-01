@@ -85,3 +85,4 @@ WORKER_CHAT = -87654321
 
 Разработчик: [**@RimMirK**](http://t.me/RimMirK)
 Канал: [**@RimEVO**](http://t.me/RimEVO)
+
