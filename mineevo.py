@@ -1,7 +1,6 @@
 LOG_CHAT    = -10012345678
 WORKER_CHAT = -10012345678
 
-
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -23,7 +22,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.5.2'
+        version='3.6'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -70,6 +69,10 @@ helplist.add_module(
         Feature('Авто авто-бур', 'Сам качает топливо и заправляет бур')
     ).add_feature(
         Feature('Авто Бонус', 'Сам качает получает Ежедневный Бонус каждый день')
+    ).add_feature(
+        Feature('Авто Thx', 'Сам качает получает Ежедневный Бонус каждый день')
+    ).add_feature(
+        Feature('Авто Промо', 'Сам смотрит доступные промо и активирует иъ')
     )
 )
 
@@ -154,7 +157,6 @@ async def check_fuel(app):
 async def start_autobur(app):
     app.print("Пополняю бур")
     while True:
-        # if await check_fuel(app) == 0:
         while True:
             app.print("кач")
             new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
@@ -163,6 +165,9 @@ async def start_autobur(app):
                 continue
             if 'кончилась' in new_fuel_msg.text:
                 app.print("нефть закончилась")
+                break
+            if 'Хранилище заполнено топливом!' in new_fuel_msg.text:
+                app.print("Бак заполнен!")
                 break
             await asyncio.sleep(2)
                 
@@ -307,10 +312,26 @@ async def start_limits(app):
         
             nickname = await app.db.get(M, 'limits.nickname', '-')
             value = await app.db.get(M, 'limits.value', '-')
-            await app.send_message(WORKER_CHAT, f'перевести {nickname} {value}')
             app.print(f'перевести {nickname} {value}')
-            await app.db.set(M, 'limits.current', (await app.db.get(M, 'limits.current', 0)) + 1)
+            m = await make_request(app, f'перевести {nickname} {value}', WORKER_CHAT, timeout=10, typing=False)
+            
+            if not m:
+                app.print(f'перевести {nickname} {value} | Бот не ответил')
+                await asyncio.sleep(20)
+                continue
+            
+            if 'недостаточно денег' in m.text:
+                app.print(f'перевести {nickname} {value} | Нет денег!')
+                await app.send_message(LOG_CHAT, "❗️ Не могу перевести лимиты: денег нету!")
+                await app.db.set(M, 'limits.status', "Денег нету!")
+                break
+            
+            if f'перевел(а) игроку  {nickname}' in m.text:
+                app.print(m.text)
+                await app.db.set(M, 'limits.current', (await app.db.get(M, 'limits.current', 0)) + 1)
+                
             await asyncio.sleep(await app.db.get(M, 'limits.delay', 5))
+            
         else:
             break
     
@@ -360,7 +381,7 @@ async def _mli(app, msg):
             f"ℹ️ {b('|')} Статус: {b(status)}\n"
             f"⏱ {b('|')} Заддержка: {b(sec_to_str(delay))}\n"
             f"🪪 {b('|')} Кому: {code(nickname)}\n"
-            f"💵 {b('|')} Сколько: {b(value)}\n"
+            f"💵 {b('|')} Сколько: {code(value)}\n"
             f"🎚 {b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
             f"📟 {b('|')} уже отправилось: {b(current)} {plural(current, plural_limit)}\n"
             f"⏰ {b('|')} еще надо отправить: {b(count-current)} {plural(count-current, plural_limit)}\n"
@@ -667,4 +688,5 @@ async def auto_thx(app):
         await sent_message.delete()
         
         await asyncio.sleep(60*40)
+    
     
