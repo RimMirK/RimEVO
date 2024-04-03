@@ -23,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.7'
+        version='3.7.1'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -441,7 +441,7 @@ async def _mlvalue(app, msg):
     try: _, value = msg.text.split(maxsplit=1)
     except ValueError: return await msg.edit(f"💵 Текущее значение: {code(await app.db.get(M, 'limits.value', '--'))}")
     await app.db.set(M, 'limits.value', value)
-    await msg.edit(f"💵 Значение успещно установлено на {code(value)}")
+    await msg.edit(f"💵 Значение успешно установлено на {code(value)}")
     
 
 # открывание кейсов
