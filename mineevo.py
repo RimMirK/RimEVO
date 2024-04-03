@@ -1,6 +1,7 @@
 LOG_CHAT    = -10012345678
 WORKER_CHAT = -10012345678
 
+
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -22,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.6'
+        version='3.8'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -59,6 +60,8 @@ helplist.add_module(
         Command(['mls'], [], 'Остановить отправку (на совсем)')
     ).add_command(
         Command(['mldelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на отправку лимитов / посмотреть заддержку')
+    ).add_command(
+        Command(['mlv', 'mlvalue'], [Arg('значение', False)], 'Установить новый лимит / посмотреть текущий')
     ).add_feature(
         Feature('Авто-выборка шахты', 'автоматическая выборка шахты при увеличении уровня')
     ).add_feature(
@@ -433,6 +436,12 @@ async def _mldelay(app, msg):
             f'⏱ Текущая заддержка на отправку лимитов: {b(pnum(await app.db.get(M, "limits.delay", 5)))}'
         )
 
+@cmd(['mlv', 'mlvalue'])
+async def _mlvalue(app, msg):
+    try: _, value = msg.text.split(maxsplit=1)
+    except ValueError: return await msg.edit(f"💵 Текущее значение: {code(await app.db.get(M, 'limits.value', '--'))}")
+    await app.db.set(M, 'limits.value', value)
+    await msg.edit(f"💵 Значение успещно установлено на {code(value)}")
     
 
 # открывание кейсов
@@ -500,7 +509,7 @@ layout = (''
 async def _evo(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
     query = msg.text.split(maxsplit=1)[1]
-    answer = await make_request(app, query, WORKER_CHAT, timeout=10)
+    answer = await make_request(app, query, WORKER_CHAT, timeout=10, additional_filter=filters.user("mine_evo_bot"))
     await msg.edit(f"{SAD} Бот не ответил" if answer is None else layout.format(query, answer.text.html),
         disable_web_page_preview=True
     )
@@ -510,7 +519,7 @@ async def _evo(app, msg):
 async def _bevo(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
     query = msg.text.split(maxsplit=1)[1]
-    answer = await make_request(app, query, 'mine_evo_bot', timeout=10)
+    answer = await make_request(app, query, WORKER_CHAT, timeout=10, additional_filter=filters.user("mine_evo_bot"))
     await msg.edit(f"{SAD} Бот не ответил" if answer is None else layout.format(query, answer.text.html),
         disable_web_page_preview=True
     )
@@ -582,12 +591,12 @@ async def _new_cave(app, msg):
     await app.send_message('mine_evo_bot', msg.text[23:])
 
 # обработка копки
-@Client.on_message(
-    filters.chat(['mine_evo_bot', 'mine_evo_gold_bot']) &
-    filters.user(['mine_evo_bot', 'mine_evo_gold_bot']) &
-    filters.regex("Руда на уровень")
-    , group=get_group()
-)
+# @Client.on_message(
+#     filters.chat(['mine_evo_bot', 'mine_evo_gold_bot']) &
+#     filters.user(['mine_evo_bot', 'mine_evo_gold_bot']) &
+#     filters.regex("Руда на уровень")
+#     , group=get_group()
+# )
 async def _dig_ore(app, msg):
     t, th = msg.text, msg.text.html
     """
