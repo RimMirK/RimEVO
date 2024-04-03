@@ -23,7 +23,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.8'
+        version='3.7'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
