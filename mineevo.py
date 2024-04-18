@@ -2,6 +2,7 @@ LOG_CHAT    = -10012345678
 WORKER_CHAT = -10012345678
 
 
+
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -51,6 +52,8 @@ helplist.add_module(
     ).add_command(
         Command(['mlsend'], [Arg('ник чела в боте'), Arg('сколько раз'), Arg('сумма')], 'Отправить лимиты')
     ).add_command(
+        Command(["ab", 'аб', 'бур', 'автобур', 'кач'], [], 'Качать топливо и заправить бур')
+    ).add_command(
         Command(['mli'], [], 'Информация о текущей отправке')
     ).add_command(
         Command(['mlp'], [], 'Поставить отправку на паузу')
@@ -73,7 +76,7 @@ helplist.add_module(
     ).add_feature(
         Feature('Авто Бонус', 'Сам качает получает Ежедневный Бонус каждый день')
     ).add_feature(
-        Feature('Авто Thx', 'Сам качает получает Ежедневный Бонус каждый день')
+        Feature('Авто Thx', 'Сам вводит комманду thx')
     ).add_feature(
         Feature('Авто Промо', 'Сам смотрит доступные промо и активирует иъ')
     )
@@ -155,35 +158,44 @@ async def check_fuel(app):
             continue
         st = bur_msg.text.split()
         return int(st[ st.index('складе:') + 1 ])
+
+@cmd(["ab", 'аб', 'бур', 'автобур', 'кач'])
+async def do_autobur(app, msg=None):
+    if msg:
+        await msg.edit("👌 Качаю и заправляю бур")
+        
+    while True:
+        app.print("кач")
+        new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
+        if new_fuel_msg is None:
+            await asyncio.sleep(10)
+            continue
+        if 'кончилась' in new_fuel_msg.text:
+            app.print("нефть закончилась")
+            break
+        if 'Хранилище заполнено топливом!' in new_fuel_msg.text:
+            app.print("Бак заполнен!")
+            break
+        if 'позже' in new_fuel_msg.text:
+            app.print("Бура нет!")
+            break
+        await asyncio.sleep(2)
+            
+    app.print('бур')
+    bur_msg = await make_request(app, "бур", "mine_evo_bot", timeout=10)
+    if bur_msg is None: return
     
+    await app.request_callback_answer(
+        bur_msg.chat.id, bur_msg.id,
+        callback_data=f"am_refuel:am_refuel:{app.me.id}"
+    )
+
 # авто авто-бур
 async def start_autobur(app):
     app.print("Пополняю бур")
     while True:
-        while True:
-            app.print("кач")
-            new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
-            if new_fuel_msg is None:
-                await asyncio.sleep(10)
-                continue
-            if 'кончилась' in new_fuel_msg.text:
-                app.print("нефть закончилась")
-                break
-            if 'Хранилище заполнено топливом!' in new_fuel_msg.text:
-                app.print("Бак заполнен!")
-                break
-            await asyncio.sleep(2)
-                
-        app.print('бур')
-        bur_msg = await make_request(app, "бур", "mine_evo_bot", timeout=10)
-        if bur_msg is None:
-            await asyncio.sleep(10)
-            continue
-        await app.request_callback_answer(
-            bur_msg.chat.id, bur_msg.id,
-            callback_data=f"am_refuel:am_refuel:{app.me.id}"
-        )
-        await asyncio.sleep(60*60*4)
+        await do_autobur(app)
+        await asyncio.sleep(60*60)
 
 # авто Бонус
 async def start_autobonus(app: Client):
@@ -672,13 +684,7 @@ async def auto_promo(app):
                 bs = BeautifulSoup(promo_msg.text.html, 'lxml')
                 promos = (*map(lambda e: e.text, bs.find_all('code')[2:]),)
                 for promo in promos:
-                    sent_message = await app.send_message('mine_evo_bot', f'промо {promo}')
-                    m = await get_answer(app, sent_message, startswith='❗️')
-                    if m:
-                        try: await m.delete()
-                        except: pass
-                    await sent_message.delete()
-                    
+                    await app.send_message('mine_evo_bot', f'промо {promo}')
                     await asyncio.sleep(4)
         else:
             await asyncio.sleep(20)
@@ -696,6 +702,8 @@ async def auto_thx(app):
             except: pass
         await sent_message.delete()
         
-        await asyncio.sleep(60*40)
+        await asyncio.sleep(60*30)
     
+    
+
     
