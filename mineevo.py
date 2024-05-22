@@ -24,7 +24,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.7.1'
+        version='3.7.2'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -74,11 +74,11 @@ helplist.add_module(
     ).add_feature(
         Feature('Авто авто-бур', 'Сам качает топливо и заправляет бур')
     ).add_feature(
-        Feature('Авто Бонус', 'Сам качает получает Ежедневный Бонус каждый день')
+        Feature('Авто Бонус', 'Сам получает Ежедневный Бонус каждый день')
     ).add_feature(
         Feature('Авто Thx', 'Сам вводит комманду thx')
     ).add_feature(
-        Feature('Авто Промо', 'Сам смотрит доступные промо и активирует иъ')
+        Feature('Авто Промо', 'Сам смотрит доступные промокоды и активирует их')
     )
 )
 
@@ -122,10 +122,11 @@ async def _mine(app, msg):
 
 
 # копатель
-async def digger(app):
+async def digger(app: Client):
+    import logging
     while True:
         if await app.db.get(M, 'work', False) == True:
-            app.print('коп')
+            app.logger.debug('коп')
 
             try: await app.send_message('mine_EVO_gold_bot', "⛏ Копать")
             except errors.flood_420.FloodWait as s:
@@ -139,7 +140,7 @@ async def digger(app):
 async def attacker(app):
     while True:
         if await app.db.get(M, 'atc', False):
-            app.print('атк')
+            app.logger.debug('атк')
 
             try: await app.send_message('mine_EVO_bot', "атк")
             except errors.flood_420.FloodWait as s:
@@ -165,23 +166,23 @@ async def do_autobur(app, msg=None):
         await msg.edit("👌 Качаю и заправляю бур")
         
     while True:
-        app.print("кач")
+        app.logger.debug("кач")
         new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
         if new_fuel_msg is None:
             await asyncio.sleep(10)
             continue
         if 'кончилась' in new_fuel_msg.text:
-            app.print("нефть закончилась")
+            app.logger.warning("нефть закончилась")
             break
         if 'Хранилище заполнено топливом!' in new_fuel_msg.text:
-            app.print("Бак заполнен!")
+            app.logger.warning("Бак заполнен!")
             break
         if 'позже' in new_fuel_msg.text:
-            app.print("Бура нет!")
+            app.logger.error("Бура нет!")
             break
         await asyncio.sleep(2)
             
-    app.print('бур')
+    app.logger.debug('бур')
     bur_msg = await make_request(app, "бур", "mine_evo_bot", timeout=10)
     if bur_msg is None: return
     
@@ -192,7 +193,7 @@ async def do_autobur(app, msg=None):
 
 # авто авто-бур
 async def start_autobur(app):
-    app.print("Пополняю бур")
+    app.logger.debug("Пополняю бур")
     while True:
         await do_autobur(app)
         await asyncio.sleep(60*60)
@@ -327,22 +328,22 @@ async def start_limits(app):
         
             nickname = await app.db.get(M, 'limits.nickname', '-')
             value = await app.db.get(M, 'limits.value', '-')
-            app.print(f'перевести {nickname} {value}')
+            app.logger.info(f'перевести {nickname} {value}')
             m = await make_request(app, f'перевести {nickname} {value}', WORKER_CHAT, timeout=10, typing=False)
             
             if not m:
-                app.print(f'перевести {nickname} {value} | Бот не ответил')
+                app.logger.error(f'перевести {nickname} {value} | Бот не ответил')
                 await asyncio.sleep(20)
                 continue
             
             if 'недостаточно денег' in m.text:
-                app.print(f'перевести {nickname} {value} | Нет денег!')
+                app.logger.error(f'перевести {nickname} {value} | Нет денег!')
                 await app.send_message(LOG_CHAT, "❗️ Не могу перевести лимиты: денег нету!")
                 await app.db.set(M, 'limits.status', "Денег нету!")
                 break
             
             if f'перевел(а) игроку  {nickname}' in m.text:
-                app.print(m.text)
+                app.logger.info(m.text)
                 await app.db.set(M, 'limits.current', (await app.db.get(M, 'limits.current', 0)) + 1)
                 
             await asyncio.sleep(await app.db.get(M, 'limits.delay', 5))
@@ -626,11 +627,9 @@ async def _dig_ore(app, msg):
     ore_str_count = s.find_all('b')[-2].text
     ore_count = int(parse_amout(ore_str_count, pref))
     
-    # app.print(f"выокопал {plasma = } | {ore_type = } | {ore_str_count = } | {ore_count = }")
 
     d = await app.db.get(M, 'stats', {})
 
-    # app.print('Всего' + str(d))
 
     ores = d.get('ores', {})
     ores[ore_type] = ores.get(ore_type, 0) + ore_count
@@ -643,7 +642,6 @@ async def _dig_ore(app, msg):
 
     d = await app.db.get(M, 'stats_all', {})
 
-    # app.print('Всего вообще ' + str(d))
 
     ores = d.get('ores', {})
     ores[ore_type] = ores.get(ore_type, 0) + ore_count
@@ -702,8 +700,6 @@ async def auto_thx(app):
             except: pass
         await sent_message.delete()
         
-        await asyncio.sleep(60*30)
+        await asyncio.sleep(60*10)
     
-    
-
     
