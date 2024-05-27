@@ -1,8 +1,4 @@
-LOG_CHAT    = -10012345678
-WORKER_CHAT = -10012345678
-
-
-
+from .mineevo_config import *
 from pyrogram import filters, errors
 from config.user_config import PREFIX
 from utils import (
@@ -22,9 +18,9 @@ cmd = Cmd(G:=get_group())
 helplist.add_module(
     Module(
         "MineEvo",
-        description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO",
+        description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO\nСкачать/обновить модуль: https://github.com/RimMirK/RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.7.2'
+        version='3.8'
     ).add_command(
         Command(['mine'], [], 'Вывести сводку')
     ).add_command(
@@ -50,7 +46,7 @@ helplist.add_module(
     ).add_command(
         Command(['matcdelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на атаку босса / посмотреть заддержку')
     ).add_command(
-        Command(['mlsend'], [Arg('ник чела в боте'), Arg('сколько раз'), Arg('сумма')], 'Отправить лимиты')
+        Command(['mlsend'], [Arg('ник чела в боте'), Arg('сколько раз'), Arg('сумма (лимит) (можно поставить любое значение, если включен авто-лимит. Тогда значение установиться само)')], 'Отправить лимиты')
     ).add_command(
         Command(["ab", 'аб', 'бур', 'автобур', 'кач'], [], 'Качать топливо и заправить бур')
     ).add_command(
@@ -61,6 +57,8 @@ helplist.add_module(
         Command(['mlr'], [], 'Возобновить отправку (убрать с паузы)')
     ).add_command(
         Command(['mls'], [], 'Остановить отправку (на совсем)')
+    ).add_command(
+        Command(['mla'], [Arg('период', False)], 'Установить период авто-лимита. 0 чтобы выкл')
     ).add_command(
         Command(['mldelay'], [Arg('заддержка в секундах', False)], 'Установить заддержку на отправку лимитов / посмотреть заддержку')
     ).add_command(
@@ -128,11 +126,11 @@ async def digger(app: Client):
         if await app.db.get(M, 'work', False) == True:
             app.logger.debug('коп')
 
-            try: await app.send_message('mine_EVO_gold_bot', "⛏ Копать")
+            try: await app.send_message(DIG_BOT, "⛏ Копать")
             except errors.flood_420.FloodWait as s:
                 try: await asyncio.sleep(s)
                 except: await asyncio.sleep(1)
-                await app.send_message('mine_EVO_gold_bot', "⛏ Копать")
+                await app.send_message(DIG_BOT, "⛏ Копать")
             await asyncio.sleep(await app.db.get(M, 'delay', 3)) 
         else: return
 
@@ -318,17 +316,50 @@ plural_limit = ['лимит', 'лимита', 'лимитов']
 async def start_limits(app):
     while True:
         if await app.db.get(M, 'limits.status', 'stopped') == 'process':
-            if (
-                await app.db.get(M, 'limits.current', 0)
-                ==
-                await app.db.get(M, 'limits.count', 0)
-            ): 
+            
+            current = await app.db.get(M, 'limits.current', 0)
+            count = await app.db.get(M, 'limits.count', 0)
+            
+            if (current == count): 
                 await app.db.set(M, 'limits.status', 'Отправка завершена!')
                 break
         
             nickname = await app.db.get(M, 'limits.nickname', '-')
             value = await app.db.get(M, 'limits.value', '-')
+            autovalue = await app.db.get(M, 'limits.autovalue', 0)
+            
             app.logger.info(f'перевести {nickname} {value}')
+            
+            if (autovalue > 0) and (current % autovalue==0):
+                avm = await make_request(app, "б", WORKER_CHAT, timeout=10)
+                if not avm:
+                    app.logger.error("limits autovalue: бот не ответил")
+                bl = ''
+                testval = ''
+                
+                for l in avm.text.split("\n"):
+                    if l.startswith("💵"):
+                        bl = l
+                        break
+                bal = bl.split()[3]
+                testval += bal.split('.')[0]
+                pref = ''
+                for s in bal:
+                    if s.isalpha():
+                        pref += s
+                testval += pref
+                
+                lim_auto = await make_request(app, f"перевести {nickname} {testval}", WORKER_CHAT, timeout=10)
+                
+                value = str(lim_auto.text.split()[-1][:-1])
+                
+                await app.db.set(M, 'limits.value', value)
+                app.logger.info(f"Значение лимита автоматически установлено на {value}!")
+                
+                await asyncio.sleep(await app.db.get(M, 'limits.delay', 5))
+                
+                                
+            
             m = await make_request(app, f'перевести {nickname} {value}', WORKER_CHAT, timeout=10, typing=False)
             
             if not m:
@@ -362,7 +393,7 @@ async def _send(app, msg):
         return await msg.edit(f"Лимиты переводятся, но перевод на паузе")
     
     try: _, nickname, count, value = msg.text.split(maxsplit=3)
-    except ValueError: return await msg.edit(f"<code>{PREFIX}{msg.command[0]}</code> < ник игрока > < сколько раз > < сумма > ")
+    except ValueError: return await msg.edit(f"<code>{PREFIX}{msg.command[0]}</code> < ник игрока > < сколько раз > < сумма (лимит) > ")
     count = int(count)
     
     await app.db.set(M, 'limits.status', 'process')
@@ -387,15 +418,17 @@ async def _mli(app, msg):
     delay = await app.db.get(M, 'limits.delay', 5)
     if nickname := await app.db.get(M, 'limits.nickname', False):
         
-        status  = await app.db.get(M, 'limits.status', 'stopped')
-        count   = await app.db.get(M, 'limits.count')
-        current = await app.db.get(M, 'limits.current', 0)
-        value   = await app.db.get(M, 'limits.value', '-')
+        status    = await app.db.get(M, 'limits.status', 'stopped')
+        count     = await app.db.get(M, 'limits.count')
+        current   = await app.db.get(M, 'limits.current', 0)
+        value     = await app.db.get(M, 'limits.value', '-')
+        autovalue = await app.db.get(M, 'limits.autovalue', 0)
         
         await msg.edit(
             b("Текущий перевод: \n\n") +
             f"ℹ️ {b('|')} Статус: {b(status)}\n"
-            f"⏱ {b('|')} Заддержка: {b(sec_to_str(delay))}\n"
+            f"⏱ {b('|')} Заддержка: {b(sec_to_str(delay,False))}\n"
+            f"📑 {b('|')} Авто-лимит: {b('Выкл' if autovalue==0 else f'каждые {autovalue} {plural(autovalue,plural_raz)}')}\n"
             f"🪪 {b('|')} Кому: {code(nickname)}\n"
             f"💵 {b('|')} Сколько: {code(value)}\n"
             f"🎚 {b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
@@ -442,11 +475,20 @@ async def _mldelay(app, msg):
         delay = float(msg.text.split(maxsplit=1)[-1])
         await app.db.set(M, 'limits.delay', delay)
         await msg.edit(
-            f"⏱ Заддержка на отправку лимитов установлена на {b(pnum(delay))}"
+            f"⏱ Заддержка на отправку лимитов установлена на {b(pnum(delay))}\n"
+            f"Таким темпом,\n"
+            f"за {b('час')} ты отправишь {b(f'{60*60/delay:,.0f}')} {plural(int(60*60     /delay), plural_limit)}\n"
+            f"за {b(f'день {  60*60*24  /delay:,.0f}'    )} {        plural(int(60*60*24  /delay), plural_limit)}\n"
+            f"за {b(f'неделю {60*60*24*7/delay:,.0f}')} {            plural(int(60*60*24*7/delay), plural_limit)}\n"
         )
     except:
+        delay = pnum(await app.db.get(M, "limits.delay", 5))
         await msg.edit(
-            f'⏱ Текущая заддержка на отправку лимитов: {b(pnum(await app.db.get(M, "limits.delay", 5)))}'
+            f'⏱ Текущая заддержка на отправку лимитов: {b(delay)}\n'
+            f"Таким темпом,\n"
+            f"за {b('час')} ты отправишь {b(f'{60*60/delay:,.0f}')} {plural(int(60*60     /delay), plural_limit)}\n"
+            f"за {b(f'день {  60*60*24  /delay:,.0f}'    )} {        plural(int(60*60*24  /delay), plural_limit)}\n"
+            f"за {b(f'неделю {60*60*24*7/delay:,.0f}')} {            plural(int(60*60*24*7/delay), plural_limit)}\n"
         )
 
 @cmd(['mlv', 'mlvalue'])
@@ -455,7 +497,15 @@ async def _mlvalue(app, msg):
     except ValueError: return await msg.edit(f"💵 Текущее значение: {code(await app.db.get(M, 'limits.value', '--'))}")
     await app.db.set(M, 'limits.value', value)
     await msg.edit(f"💵 Значение успешно установлено на {code(value)}")
-    
+
+@cmd(['mla', 'mlautovalue'])
+async def _mlvalue(app, msg):
+    autovalue = await app.db.get(M, 'limits.autovalue', 0)
+    try: _, value = msg.text.split(maxsplit=1)
+    except ValueError: return await msg.edit(f"💵 Текущее значение: {code(autovalue) if autovalue > 0 else b('Выкл')}")
+    await app.db.set(M, 'limits.autovalue', int(value))
+    await msg.edit(f"💵 Автозначения успешно установлено на каждые {code(value)} {plural(int(value), plural_raz)}")
+        
 
 # открывание кейсов
 @cmd(["mopen", "mcase", 'мо', 'мотк', 'моткрыть'])
@@ -662,8 +712,8 @@ async def _dig_ore(app, msg):
     
 # лог кейсов, боссов
 @Client.on_message(
-    filters.chat(['mine_evo_bot', 'mine_evo_gold_bot']) &
-    filters.user(['mine_evo_bot', 'mine_evo_gold_bot']) & (
+    filters.chat(['mine_evo_bot', 'mine_evo_gold_bot', 'mine_evo_emerald_bot']) &
+    filters.user(['mine_evo_bot', 'mine_evo_gold_bot', 'mine_evo_emerald_bot']) & (
         filters.regex('[✨|😄|📦|🧧|✉️|🌌|💼|👜|🗳|🕋|💎|🎲].*Найден.*') |
         filters.regex('⚡️.*нашел\(ла\).*') |
         filters.regex('🎉 Босс')
