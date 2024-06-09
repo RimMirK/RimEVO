@@ -8,7 +8,7 @@ from utils import (
     make_request
 )
 import asyncio
-# from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 
 cmd = Cmd(G:=get_group())
 
