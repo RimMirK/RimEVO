@@ -10,6 +10,8 @@ from utils import (
 import asyncio
 from bs4 import BeautifulSoup
 
+
+
 cmd = Cmd(G:=get_group())
 
 helplist.add_module(
@@ -17,7 +19,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO\nСкачать/обновить модуль: https://github.com/RimMirK/RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.9.0'
+        version='3.10.0'
     ).add_command(
         Command(['msetlogchat'], [], 'Установить ЛОГ чат (куда выводить отчет о найденых кейсах)')
     ).add_command(
@@ -30,6 +32,12 @@ helplist.add_module(
         Command(['mdig'], [], 'Начать копать')
     ).add_command(
         Command(['mstopdig', 'mnodig', 'mundig'], [], 'Перестать копать')
+    ).add_command(
+        Command(['mautothx'], [], 'Включить/Выключить авто-thx')
+    ).add_command(
+        Command(['mautopromo'], [], 'Включить/Выключить авто-промо')
+    ).add_command(
+        Command(['mautobonus'], [], 'Включить/Выключить авто-ежедневный бонус')
     ).add_command(
         Command(['evo'], [Arg('запрос/команда')], 'Отправить запрос/команду в робочий чат и посмотреть ответ. Пример: .evo время')
     ).add_command(
@@ -91,9 +99,18 @@ dig_bots = ["mine_evo_bot", "mine_evo_gold_bot", "mine_evo_emerald_bot"]
 
 plural_raz = ["раз", "раза", "раз"]
 
-get_worker_chat = lambda app: app.db.get('MineEVO.config', 'worker_chat', 'mine_evo_bot')
-get_log_chat = lambda app, thread=False: app.db.get('MineEVO.config', 'log_chat.thread') if thread else app.db.get('MineEVO.config', 'log_chat', 'me')
-get_dig_bot = lambda app: app.db.get('MineEVO.config', 'digbot', 'mine_evo_bot')
+get_log_chat = (
+    lambda app, thread=False: app.db.get('MineEVO.config', 'log_chat.thread') 
+          if thread      else app.db.get('MineEVO.config', 'log_chat', 'me')
+)
+get_dig_bot = (
+    lambda app, thread=False: app.db.get('MineEVO.config', 'digbot.thread') 
+          if thread      else app.db.get('MineEVO.config', 'digbot', 'mine_evo_bot')
+)
+get_worker_chat = (
+    lambda app, thread=False: app.db.get('MineEVO.config', 'worker_chat.thread') 
+          if thread      else app.db.get('MineEVO.config', 'worker_chat', 'mine_evo_bot')
+)
 
 # при запуске
 @Client.on_ready(group=get_group())
@@ -110,6 +127,30 @@ async def _on_ready(app, *_):
     await asyncio.sleep(60*5)
     ev.create_task(auto_promo(app)) # авто промо
 
+class Emjs:
+    V = '<emoji id="5359300921123683281">✅</emoji>'
+    X = '<emoji id="5359457318062798459">❌</emoji>'
+
+
+@cmd(['mautothx'])
+async def _autothx(app, msg):
+    autothx = await app.db.get(M, 'autothx', False)
+    await app.db.set(M, 'autothx', not autothx)
+    await msg.edit(f"Авто thx {f'выключен {Emjs.X}' if autothx else f'включен {Emjs.V}'}")
+
+@cmd(['mautopromo'])
+async def _autopromo(app, msg):
+    autopromo = await app.db.get(M, 'autopromo', False)
+    await app.db.set(M, 'autopromo', not autopromo)
+    await msg.edit(f"Авто-промо {f'выключен {Emjs.X}' if autopromo else f'включен {Emjs.V}'}")
+    
+@cmd(['mautobonus'])
+async def _autobonus(app, msg):
+    autobonus = await app.db.get(M, 'autobonus', False)
+    await app.db.set(M, 'autobonus', not autobonus)
+    await msg.edit(f"Авто ежеднеыный бонус {f'выключен {Emjs.X}' if autobonus else f'включен {Emjs.V}'}")
+
+
 
 @cmd(['msetlogchat'])
 async def _setlogchat(app, msg):
@@ -120,11 +161,13 @@ async def _setlogchat(app, msg):
 @cmd(['msetworkerchat', 'msetworkchat'])
 async def _setworkerchat(app, msg):
     await app.db.set("MineEVO.config", 'worker_chat', msg.chat.id)
+    await app.db.set("MineEVO.config", 'worker_chat.thread', msg.message_thread_id)
     await msg.edit(b("Робочий чат успешно установлен!"))
 
 @cmd(['msetdigbot', 'msetdigchat'])
 async def _setdigbot(app, msg):
     await app.db.set("MineEVO.config", 'digbot', msg.chat.id)
+    await app.db.set("MineEVO.config", 'digbot.thread', msg.message_thread_id)
     await msg.edit(b("Чат для копки успешно установлен!"))
 
 get_stats = lambda app, case, all=False: app.db.get(f'MineEVO.stats{".all" if all else ""}', case, 0)
@@ -142,18 +185,21 @@ async def _mine(app, msg):
         ) + '\n'
     o += f"🪨 Вскопал: {b(fm(c))} {b(plural(c, plural_raz))} | {b(fm(all_c))} {b(plural(all_c, plural_raz))}\n"
     o += f"🎆 Плазма: {b(fm(await get_stats(app, 'плазма')))} | {b(fm(await get_stats(app, 'плазма', True)))}\n\n"
+    o += f"😇 Авто-thx: {b(f'включен {Emjs.V}' if await app.db.get(M, 'autothx', False) else f'выключен {Emjs.X}', False)}\n"
+    o += f"🎊 Авто-промо: {b(f'включен {Emjs.V}' if await app.db.get(M, 'autopromo', False) else f'выключен {Emjs.X}', False)}\n"
+    o += f"🎁 Авто-бонус: {b(f'включен {Emjs.V}' if await app.db.get(M, 'autobonus', False) else f'выключен {Emjs.X}', False)}\n\n"
     o += b('Статистика по найденным кейсам:\n')
     s = (
-        (f"  ✉️ Конверт: {             b(fm(await get_stats(app, 'кт'))) } | {b(fm(await get_stats(app, 'кт',  True)))} \n" if (await get_stats(app, 'кт'))  > 0 or (await get_stats(app, 'кт', True))  > 0 else '') +
-        (f"  🧧 Редкий конверт: {      b(fm(await get_stats(app, 'ркт')))} | {b(fm(await get_stats(app, 'ркт', True)))} \n" if (await get_stats(app, 'ркт')) > 0 or (await get_stats(app, 'ркт', True)) > 0 else '') +
-        (f"  📦 Кейс: {                b(fm(await get_stats(app, 'к')))  } | {b(fm(await get_stats(app, 'к',   True)))} \n" if (await get_stats(app, 'к'))   > 0 or (await get_stats(app, 'к', True))   > 0 else '') +
-        (f"  🗳 Редкий кейс: {         b(fm(await get_stats(app, 'рк'))) } | {b(fm(await get_stats(app, 'рк',  True)))} \n" if (await get_stats(app, 'рк'))  > 0 or (await get_stats(app, 'рк', True))  > 0 else '') +
-        (f"  🕋 Мифический кейс: {     b(fm(await get_stats(app, 'миф')))} | {b(fm(await get_stats(app, 'миф', True)))} \n" if (await get_stats(app, 'миф')) > 0 or (await get_stats(app, 'миф', True)) > 0 else '') +
-        (f"  💎 Кристальный кейс: {    b(fm(await get_stats(app, 'кр'))) } | {b(fm(await get_stats(app, 'кр',  True)))} \n" if (await get_stats(app, 'кр'))  > 0 or (await get_stats(app, 'кр', True))  > 0 else '') +
-        (f"  🎲 Дайс кейс: {           b(fm(await get_stats(app, 'дк'))) } | {b(fm(await get_stats(app, 'дк',  True)))} \n" if (await get_stats(app, 'дк'))  > 0 or (await get_stats(app, 'дк', True))  > 0 else '') +
-        (f"  💼 Портфель с эскизами: { b(fm(await get_stats(app, 'псэ')))} | {b(fm(await get_stats(app, 'псэ', True)))} \n" if (await get_stats(app, 'псэ')) > 0 or (await get_stats(app, 'псэ', True)) > 0 else '') +
-        (f"  👜 Сумка с предметами: {  b(fm(await get_stats(app, 'ссп')))} | {b(fm(await get_stats(app, 'ссп', True)))} \n" if (await get_stats(app, 'ссп')) > 0 or (await get_stats(app, 'ссп', True)) > 0 else '') +
-        (f"  🌌 Звездный кейс: {       b(fm(await get_stats(app, 'зв'))) } | {b(fm(await get_stats(app, 'зв',  True)))} \n" if (await get_stats(app, 'зв'))  > 0 or (await get_stats(app, 'зв', True))  > 0 else '')
+        (f" ✉️  Конверт: {             b(fm(await get_stats(app, 'кт'))) } | {b(fm(await get_stats(app, 'кт',  True)))} \n" if (await get_stats(app, 'кт'))  > 0 or (await get_stats(app, 'кт', True))  > 0 else '') +
+        (f" 🧧  Редкий конверт: {      b(fm(await get_stats(app, 'ркт')))} | {b(fm(await get_stats(app, 'ркт', True)))} \n" if (await get_stats(app, 'ркт')) > 0 or (await get_stats(app, 'ркт', True)) > 0 else '') +
+        (f" 📦  Кейс: {                b(fm(await get_stats(app, 'к')))  } | {b(fm(await get_stats(app, 'к',   True)))} \n" if (await get_stats(app, 'к'))   > 0 or (await get_stats(app, 'к', True))   > 0 else '') +
+        (f" 🗳  Редкий кейс: {          b(fm(await get_stats(app, 'рк'))) } | {b(fm(await get_stats(app, 'рк',  True)))} \n" if (await get_stats(app, 'рк'))  > 0 or (await get_stats(app, 'рк', True))  > 0 else '') +
+        (f" 🕋  Мифический кейс: {     b(fm(await get_stats(app, 'миф')))} | {b(fm(await get_stats(app, 'миф', True)))} \n" if (await get_stats(app, 'миф')) > 0 or (await get_stats(app, 'миф', True)) > 0 else '') +
+        (f" 💎  Кристальный кейс: {    b(fm(await get_stats(app, 'кр'))) } | {b(fm(await get_stats(app, 'кр',  True)))} \n" if (await get_stats(app, 'кр'))  > 0 or (await get_stats(app, 'кр', True))  > 0 else '') +
+        (f" 🎲  Дайс кейс: {           b(fm(await get_stats(app, 'дк'))) } | {b(fm(await get_stats(app, 'дк',  True)))} \n" if (await get_stats(app, 'дк'))  > 0 or (await get_stats(app, 'дк', True))  > 0 else '') +
+        (f" 💼  Портфель с эскизами: { b(fm(await get_stats(app, 'псэ')))} | {b(fm(await get_stats(app, 'псэ', True)))} \n" if (await get_stats(app, 'псэ')) > 0 or (await get_stats(app, 'псэ', True)) > 0 else '') +
+        (f" 👜  Сумка с предметами: {  b(fm(await get_stats(app, 'ссп')))} | {b(fm(await get_stats(app, 'ссп', True)))} \n" if (await get_stats(app, 'ссп')) > 0 or (await get_stats(app, 'ссп', True)) > 0 else '') +
+        (f" 🌌  Звездный кейс: {       b(fm(await get_stats(app, 'зв'))) } | {b(fm(await get_stats(app, 'зв',  True)))} \n" if (await get_stats(app, 'зв'))  > 0 or (await get_stats(app, 'зв', True))  > 0 else '')
     )
     o += s if s else b("Пусто\n")
     await msg.edit(o)
@@ -164,7 +210,7 @@ async def digger(app: Client):
     while True:
         if await app.db.get(M, 'work', False) == True:
             app.logger.debug('коп')
-            await app.send_message(await get_dig_bot(app), "⛏ Копать")
+            await app.send_message(await get_dig_bot(app), "⛏ Копать", message_thread_id = await get_worker_chat(app, True))
             await asyncio.sleep(await app.db.get(M, 'delay', 3)) 
         else: return
 
@@ -228,8 +274,11 @@ async def start_autobur(app):
 # авто Бонус
 async def start_autobonus(app: Client):
     while True:
-        await make_request(app, 'еб', await get_worker_chat(app), timeout=10)
-        await asyncio.sleep(60*60*24 +1)
+        if await app.db.get(M, 'autobonus', False):
+            await make_request(app, 'еб', await get_worker_chat(app), timeout=10, message_thread_id=await get_worker_chat(app, True))
+            await asyncio.sleep(60*60*24 +1)
+        else:
+            await asyncio.sleep(60)
 
 # начать копать
 @cmd(['mdig'])
@@ -363,7 +412,7 @@ async def start_limits(app):
             app.logger.info(f'перевести {nickname} {value}')
             
             if (autovalue > 0) and (current % autovalue==0):
-                avm = await make_request(app, "б", await get_worker_chat(app), timeout=10)
+                avm = await make_request(app, "б", await get_worker_chat(app), timeout=10, message_thread_id=await get_worker_chat(app, True))
                 if not avm:
                     app.logger.error("limits autovalue: бот не ответил")
                 bl = ''
@@ -381,7 +430,7 @@ async def start_limits(app):
                         pref += s
                 testval += pref
                 
-                lim_auto = await make_request(app, f"перевести {nickname} {testval}", await get_worker_chat(app), timeout=10)
+                lim_auto = await make_request(app, f"перевести {nickname} {testval}", await get_worker_chat(app), timeout=10, message_thread_id=await get_worker_chat(app, True))
                 
                 value = str(lim_auto.text.split()[-1][:-1])
                 
@@ -392,7 +441,7 @@ async def start_limits(app):
                 
                                 
             
-            m = await make_request(app, f'перевести {nickname} {value}', await get_worker_chat(app), timeout=10, typing=False)
+            m = await make_request(app, f'перевести {nickname} {value}', await get_worker_chat(app), timeout=10, typing=False, message_thread_id=await get_worker_chat(app, True))
             
             if not m:
                 app.logger.error(f'перевести {nickname} {value} | Бот не ответил')
@@ -458,15 +507,15 @@ async def _mli(app, msg):
         
         await msg.edit(
             b("Текущий перевод: \n\n") +
-            f"ℹ️ {b('|')} Статус: {b(status)}\n"
+            f"ℹ️ {  b('|')} Статус: {b(status)}\n"
             f"⏱ {b('|')} Заддержка: {b(sec_to_str(delay,False))}\n"
-            f"📑 {b('|')} Авто-лимит: {b('Выкл' if autovalue==0 else f'каждые {autovalue} {plural(autovalue,plural_raz)}')}\n"
+            f"📑 {b('|')} Авто-лимит: {b(f'Выкл {Emjs.X}' if autovalue==0 else f'каждые {autovalue} {plural(autovalue,plural_raz)}')}\n"
             f"🪪 {b('|')} Кому: {code(nickname)}\n"
             f"💵 {b('|')} Сколько: {code(value)}\n"
-            f"🎚 {b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
+            f"🎚 { b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
             f"📟 {b('|')} уже отправилось: {b(current)} {plural(current, plural_limit)}\n"
             f"⏰ {b('|')} еще надо отправить: {b(count-current)} {plural(count-current, plural_limit)}\n"
-            f"⏳ {b('|')} Примерно осталось: {b(sec_to_str((count-current)*delay))}"
+            f"⏳ {b('|')} Примерно осталось: {b(sec_to_str((count-current)*delay + ((delay*current//autovalue) if autovalue > 0 else 0)))}"
         )
     else:
         return await msg.edit(f"Переводов нет!\n\nЗаддержка: {b(delay)}")
@@ -604,7 +653,7 @@ layout = (''
 async def _evo(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
     query = msg.text.split(maxsplit=1)[1]
-    answer = await make_request(app, query, await get_worker_chat(app), timeout=10, additional_filter=filters.user("mine_evo_bot"))
+    answer = await make_request(app, query, await get_worker_chat(app), timeout=10, additional_filter=filters.user("mine_evo_bot"), message_thread_id=await get_worker_chat(app, True))
     await msg.edit(f"{SAD} Бот не ответил" if answer is None else layout.format(query, answer.text.html),
         disable_web_page_preview=True
     )
@@ -623,7 +672,7 @@ async def _bevo(app, msg):
 @cmd(['mcases', 'мк', 'мкейсы'])
 async def _cases(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
-    answer = await make_request(app, 'кейсы', await get_worker_chat(app), '📦 Кейсы игрока', 10)
+    answer = await make_request(app, 'кейсы', await get_worker_chat(app), '📦 Кейсы игрока', 10, message_thread_id=await get_worker_chat(app, True))
     await msg.edit(
         f"{SAD} Бот не ответил" if answer is None else split_to(split_to(answer.text.html, '🔥'), 'Открыть'),
         disable_web_page_preview=True
@@ -633,7 +682,7 @@ async def _cases(app, msg):
 @cmd(['mprof', 'mp', 'мп', 'мпроф', 'мпрофиль'])
 async def _prof(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
-    answer = await make_request(app, 'профиль', await get_worker_chat(app), 'Профиль пользователя', 10)
+    answer = await make_request(app, 'профиль', await get_worker_chat(app), 'Профиль пользователя', 10, message_thread_id=await get_worker_chat(app, True))
     await msg.edit(f"{SAD} Бот не ответил" if answer is None else split_to(answer.text.html, '🔥'),
         disable_web_page_preview=True
     )
@@ -702,26 +751,32 @@ async def _find_cases(app, msg):
 # авто промо
 async def auto_promo(app):
     while True:
-        promo_msg = await make_request(app, 'промо', 'mine_evo_bot', timeout=10)
-        if promo_msg != None:
-            if "чтобы, ввести промокод, используй:" in promo_msg.text:
-                bs = BeautifulSoup(promo_msg.text.html, 'lxml')
-                promos = (*map(lambda e: e.text, bs.find_all('code')[2:]),)
-                for promo in promos:
-                    await app.send_message('mine_evo_bot', f'промо {promo}')
-                    await asyncio.sleep(4)
+        if await app.db.get(M, 'autopromo', False):
+            promo_msg = await make_request(app, 'промо', 'mine_evo_bot', timeout=10)
+            if promo_msg != None:
+                if "чтобы, ввести промокод, используй:" in promo_msg.text:
+                    bs = BeautifulSoup(promo_msg.text.html, 'lxml')
+                    promos = (*map(lambda e: e.text, bs.find_all('code')[2:]),)
+                    for promo in promos:
+                        await app.send_message('mine_evo_bot', f'промо {promo}')
+                        await asyncio.sleep(4)
+            else:
+                await asyncio.sleep(20)
+                continue
+            
+            await asyncio.sleep(60*60)   
         else:
-            await asyncio.sleep(20)
-            continue
-        
-        await asyncio.sleep(60*60*20)   
+            await asyncio.sleep(60)
                     
 # авто thx 
 async def auto_thx(app):
     while True:
-        await app.send_message(await get_worker_chat(app), 'thx')
-        
-        await asyncio.sleep(60*5)
+        if await app.db.get(M, 'autothx', False):
+            m = await app.send_message(await get_worker_chat(app), 'thx', message_thread_id=await get_worker_chat(app, True))
+            await m.delete()
+            await asyncio.sleep(60*5)
+        else:
+            await asyncio.sleep(60)
     
     
 # статистика для кейсов
