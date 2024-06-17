@@ -5,7 +5,7 @@ from utils import (
     helplist, Module, Argument as Arg, Feature, Command,
     plural, pnum, sec_to_str,
     ModifyPyrogramClient as Client,
-    make_request
+    make_request, thread_filter
 )
 import asyncio
 from bs4 import BeautifulSoup
@@ -19,7 +19,7 @@ helplist.add_module(
         "MineEvo",
         description="Модуль для игры @mine_evo_bot\nКанал с обновлениями: @RimEVO\nСкачать/обновить модуль: https://github.com/RimMirK/RimEVO",
         author="@RimMirK & @kotcananacom",
-        version='3.10.0'
+        version='3.10.1'
     ).add_command(
         Command(['msetlogchat'], [], 'Установить ЛОГ чат (куда выводить отчет о найденых кейсах)')
     ).add_command(
@@ -38,6 +38,8 @@ helplist.add_module(
         Command(['mautopromo'], [], 'Включить/Выключить авто-промо')
     ).add_command(
         Command(['mautobonus'], [], 'Включить/Выключить авто-ежедневный бонус')
+    ).add_command(
+        Command(['mautobur'], [], 'Включить/Выключить авто-авто бур')
     ).add_command(
         Command(['evo'], [Arg('запрос/команда')], 'Отправить запрос/команду в робочий чат и посмотреть ответ. Пример: .evo время')
     ).add_command(
@@ -150,6 +152,11 @@ async def _autobonus(app, msg):
     await app.db.set(M, 'autobonus', not autobonus)
     await msg.edit(f"Авто ежеднеыный бонус {f'выключен {Emjs.X}' if autobonus else f'включен {Emjs.V}'}")
 
+@cmd(['mautobur'])
+async def _autobur(app, msg):
+    autobur = await app.db.get(M, 'autobur', False)
+    await app.db.set(M, 'autobur', not autobur)
+    await msg.edit(f"Авто бур {f'выключен {Emjs.X}' if autobur else f'включен {Emjs.V}'}")
 
 
 @cmd(['msetlogchat'])
@@ -233,16 +240,14 @@ async def check_fuel(app):
         st = bur_msg.text.split()
         return int(st[ st.index('складе:') + 1 ])
 
-@cmd(["ab", 'аб', 'бур', 'автобур', 'кач'])
-async def do_autobur(app, msg=None):
-    if msg:
-        await msg.edit("👌 Качаю и заправляю бур")
-        
+async def do_autobur(app):
     while True:
+        if not await app.db.get(M, 'autobur', False):
+            return
         app.logger.debug("кач")
         new_fuel_msg = await make_request(app, "кач", "mine_evo_bot", timeout=10)
         if new_fuel_msg is None:
-            await asyncio.sleep(10)
+            await asyncio.sleep(60)
             continue
         if 'кончилась' in new_fuel_msg.text:
             app.logger.warning("нефть закончилась")
@@ -268,7 +273,8 @@ async def do_autobur(app, msg=None):
 async def start_autobur(app):
     app.logger.debug("Пополняю бур")
     while True:
-        await do_autobur(app)
+        if await app.db.get(M, 'autobur', False):
+            await do_autobur(app)
         await asyncio.sleep(60*60)
 
 # авто Бонус
@@ -409,12 +415,17 @@ async def start_limits(app):
             value = await app.db.get(M, 'limits.value', '-')
             autovalue = await app.db.get(M, 'limits.autovalue', 0)
             
-            app.logger.info(f'перевести {nickname} {value}')
             
             if (autovalue > 0) and (current % autovalue==0):
-                avm = await make_request(app, "б", await get_worker_chat(app), timeout=10, message_thread_id=await get_worker_chat(app, True))
+                avm = await make_request(app, "б",
+                    await get_worker_chat(app),
+                    timeout=10,
+                    message_thread_id=await get_worker_chat(app, True),
+                    additional_filter=filters.bot & thread_filter(await get_worker_chat(app, True))
+                )
                 if not avm:
                     app.logger.error("limits autovalue: бот не ответил")
+                    continue
                 bl = ''
                 testval = ''
                 
@@ -430,9 +441,17 @@ async def start_limits(app):
                         pref += s
                 testval += pref
                 
-                lim_auto = await make_request(app, f"перевести {nickname} {testval}", await get_worker_chat(app), timeout=10, message_thread_id=await get_worker_chat(app, True))
-                
-                value = str(lim_auto.text.split()[-1][:-1])
+                lim_auto = await make_request(app,
+                    f"перевести {nickname} {testval}",
+                    await get_worker_chat(app),
+                    timeout=10,
+                    message_thread_id=await get_worker_chat(app, True),
+                    additional_filter=filters.bot & thread_filter(await get_worker_chat(app, True))
+                )
+                if lim_auto:
+                    value = str(lim_auto.text.split()[-1][:-1])
+                else:
+                    continue
                 
                 await app.db.set(M, 'limits.value', value)
                 app.logger.info(f"Значение лимита автоматически установлено на {value}!")
@@ -441,7 +460,15 @@ async def start_limits(app):
                 
                                 
             
-            m = await make_request(app, f'перевести {nickname} {value}', await get_worker_chat(app), timeout=10, typing=False, message_thread_id=await get_worker_chat(app, True))
+            app.logger.info(f'перевести {nickname} {value}')
+            m = await make_request(app,
+                f'перевести {nickname} {value}',
+                await get_worker_chat(app),
+                timeout=10,
+                typing=False,
+                message_thread_id=await get_worker_chat(app, True),
+                additional_filter=filters.bot & thread_filter(await get_worker_chat(app, True))
+            )
             
             if not m:
                 app.logger.error(f'перевести {nickname} {value} | Бот не ответил')
@@ -515,7 +542,7 @@ async def _mli(app, msg):
             f"🎚 { b('|')} Сколько раз: {b(count)} {plural(count, plural_raz)}\n"
             f"📟 {b('|')} уже отправилось: {b(current)} {plural(current, plural_limit)}\n"
             f"⏰ {b('|')} еще надо отправить: {b(count-current)} {plural(count-current, plural_limit)}\n"
-            f"⏳ {b('|')} Примерно осталось: {b(sec_to_str((count-current)*delay + ((delay*current//autovalue) if autovalue > 0 else 0)))}"
+            f"⏳ {b('|')} Примерно осталось: {b(sec_to_str((count-current)*delay + ((delay*(count-current)//autovalue) if autovalue > 0 else 0)))}"
         )
     else:
         return await msg.edit(f"Переводов нет!\n\nЗаддержка: {b(delay)}")
@@ -653,7 +680,7 @@ layout = (''
 async def _evo(app, msg):
     await msg.edit(f'{LOADING} Загрузка...')
     query = msg.text.split(maxsplit=1)[1]
-    answer = await make_request(app, query, await get_worker_chat(app), timeout=10, additional_filter=filters.user("mine_evo_bot"), message_thread_id=await get_worker_chat(app, True))
+    answer = await make_request(app, query, await get_worker_chat(app), timeout=10, additional_filter=filters.user("mine_evo_bot") & thread_filter(await get_worker_chat(app, True)), message_thread_id=await get_worker_chat(app, True))
     await msg.edit(f"{SAD} Бот не ответил" if answer is None else layout.format(query, answer.text.html),
         disable_web_page_preview=True
     )
@@ -772,8 +799,9 @@ async def auto_promo(app):
 async def auto_thx(app):
     while True:
         if await app.db.get(M, 'autothx', False):
-            m = await app.send_message(await get_worker_chat(app), 'thx', message_thread_id=await get_worker_chat(app, True))
-            await m.delete()
+            m = await make_request(app, 'thx', await get_worker_chat(app), '❕В данный момент благодарить некого.', message_thread_id=await get_worker_chat(app, True))
+            if m:
+                await m.delete()
             await asyncio.sleep(60*5)
         else:
             await asyncio.sleep(60)
