@@ -1,4 +1,5 @@
 # RimEVO
+# ВНИМАНИЕ! ЭТОТ МОДУЛЬ ПРЕДНОЗНАЧЕН ДЛЯ RIMTUB СТАРОЙ ВЕРСИИ (1.7). НОВЫЕ МОДУЛИ ДЛЯ MINEEVO ТУТ -> [@RimTUB_MineEVO](https://t.me/RimTUB_MineEVO)
 Модуль для моего юзербота RimTUB для игры в @mine_evo_bot (telegram)
 
 - [Установка](#установка)
